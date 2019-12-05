@@ -7,10 +7,14 @@ SPDX-License-Identifier: Apache-2.0
 package lscc
 
 import (
+	"fmt"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/core/common/ccprovider"
 	"github.com/hyperledger/fabric/core/common/privdata"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 	"github.com/pkg/errors"
@@ -71,6 +75,35 @@ func (p *DeployedCCInfoProvider) ChaincodeInfo(chaincodeName string, qe ledger.S
 	if err != nil {
 		return nil, err
 	}
+
+	msp := mgmt.GetLocalMSP()
+	mspid, err := msp.GetIdentifier()
+	if err != nil {
+		panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+	}
+
+	// we add the local collection definition
+	if collConfigPkg == nil {
+		collConfigPkg = &common.CollectionConfigPackage{}
+	}
+
+	if collConfigPkg.Config == nil {
+		collConfigPkg.Config = []*common.CollectionConfig{}
+	}
+
+	collConfigPkg.Config = append(collConfigPkg.Config, &common.CollectionConfig{
+		Payload: &common.CollectionConfig_StaticCollectionConfig{
+			StaticCollectionConfig: &common.StaticCollectionConfig{
+				Name: "~local",
+				MemberOrgsPolicy: &common.CollectionPolicyConfig{
+					Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+						SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+					},
+				},
+			},
+		},
+	})
+
 	return &ledger.DeployedChaincodeInfo{
 		Name:                chaincodeName,
 		Hash:                chaincodeData.Id,
@@ -81,6 +114,24 @@ func (p *DeployedCCInfoProvider) ChaincodeInfo(chaincodeName string, qe ledger.S
 
 // CollectionInfo implements function in interface ledger.DeployedChaincodeInfoProvider
 func (p *DeployedCCInfoProvider) CollectionInfo(chaincodeName, collectionName string, qe ledger.SimpleQueryExecutor) (*common.StaticCollectionConfig, error) {
+
+	if collectionName == "~local" {
+		msp := mgmt.GetLocalMSP()
+		mspid, err := msp.GetIdentifier()
+		if err != nil {
+			panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+		}
+
+		return &common.StaticCollectionConfig{
+			Name: "~local",
+			MemberOrgsPolicy: &common.CollectionPolicyConfig{
+				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+				},
+			},
+		}, nil
+	}
+
 	collConfigPkg, err := fetchCollConfigPkg(chaincodeName, qe)
 	if err != nil || collConfigPkg == nil {
 		return nil, err

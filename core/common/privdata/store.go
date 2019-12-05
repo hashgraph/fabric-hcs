@@ -10,8 +10,10 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/msp"
+	"github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/protos/common"
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -78,6 +80,27 @@ func RetrieveCollectionConfigPackageFromState(cc common.CollectionCriteria, stat
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid configuration for collection criteria %#v", cc)
 	}
+
+	// msp := mgmt.GetLocalMSP()
+	// mspid, err := msp.GetIdentifier()
+	// if err != nil {
+	// 	panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+	// }
+
+	// // we add the local collection definition
+	// conf.Config = append(conf.Config, &common.CollectionConfig{
+	// 	Payload: &common.CollectionConfig_StaticCollectionConfig{
+	// 		StaticCollectionConfig: &common.StaticCollectionConfig{
+	// 			Name: "~local",
+	// 			MemberOrgsPolicy: &common.CollectionPolicyConfig{
+	// 				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+	// 					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// })
+
 	return conf, nil
 }
 
@@ -93,6 +116,23 @@ func ParseCollectionConfig(colBytes []byte) (*common.CollectionConfigPackage, er
 }
 
 func (c *simpleCollectionStore) retrieveCollectionConfig(cc common.CollectionCriteria, qe ledger.QueryExecutor) (*common.StaticCollectionConfig, error) {
+	if cc.Collection == "~local" {
+		msp := mgmt.GetLocalMSP()
+		mspid, err := msp.GetIdentifier()
+		if err != nil {
+			panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+		}
+
+		return &common.StaticCollectionConfig{
+			Name: "~local",
+			MemberOrgsPolicy: &common.CollectionPolicyConfig{
+				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+				},
+			},
+		}, nil
+	}
+
 	collections, err := c.retrieveCollectionConfigPackage(cc, qe)
 	if err != nil {
 		return nil, err

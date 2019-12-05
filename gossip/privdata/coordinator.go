@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger/fabric/common/cauthdsl"
 	vsccErrors "github.com/hyperledger/fabric/common/errors"
 	util2 "github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/committer"
@@ -24,6 +25,7 @@ import (
 	"github.com/hyperledger/fabric/gossip/metrics"
 	privdatacommon "github.com/hyperledger/fabric/gossip/privdata/common"
 	"github.com/hyperledger/fabric/gossip/util"
+	"github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/msp"
@@ -167,6 +169,13 @@ func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDa
 		Block:          block,
 		PvtData:        make(ledger.TxPvtDataMap),
 		MissingPvtData: make(ledger.TxMissingPvtDataMap),
+	}
+
+	// lookup everything we've got from the transient store for local collections
+	privateDataSets, err = c.addLocalCollectionData(block, privateDataSets)
+	if err != nil {
+		logger.Errorf("addLocalCollectionData failed: %+v", err)
+		return err
 	}
 
 	listMissingStart := time.Now()
@@ -646,6 +655,97 @@ type privateDataInfo struct {
 	missingRWSButIneligible []rwSetKey
 }
 
+type localCollectionEnhancer struct {
+	privateDataSets util.PvtDataCollections
+	c               *coordinator
+}
+
+func (l *localCollectionEnhancer) inspect(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, endorsers []*peer.Endorsement) error {
+	for _, rws := range txRWSet.NsRwSets {
+		for _, ns := range rws.CollHashedRwSets {
+			if ns.CollectionName != "~local" {
+				continue
+			}
+
+			t := ledger.PvtNsCollFilter{
+				rws.NameSpace: ledger.PvtCollFilter{"~local": true},
+			}
+
+			logger.Debugf("GetTxPvtRWSetByTxid for %s %+v", chdr.TxId, t)
+
+			iterator, err := l.c.TransientStore.GetTxPvtRWSetByTxid(chdr.TxId, t)
+			if err != nil {
+				logger.Warning("Failed obtaining iterator from transient store:", err)
+				return err
+			}
+			defer iterator.Close()
+
+			for {
+				res, err := iterator.NextWithConfig()
+				if err != nil {
+					logger.Error("Failed iterating:", err)
+					break
+				}
+
+				logger.Debugf("GetTxPvtRWSetByTxid got %+v", res)
+
+				if res == nil {
+					// End of iteration
+					break
+				}
+				if res.PvtSimulationResultsWithConfig == nil {
+					logger.Warning("Resultset's PvtSimulationResultsWithConfig for", chdr.TxId, "is nil, skipping")
+					continue
+				}
+				simRes := res.PvtSimulationResultsWithConfig
+				if simRes.PvtRwset == nil {
+					logger.Warning("The PvtRwset of PvtSimulationResultsWithConfig for", chdr.TxId, "is nil, skipping")
+					continue
+				}
+
+				l.privateDataSets = append(l.privateDataSets, &ledger.TxPvtData{
+					SeqInBlock: seqInBlock,
+					WriteSet:   res.PvtSimulationResultsWithConfig.PvtRwset,
+				})
+			} // iterating over the TxPvtRWSet results
+		}
+	}
+
+	return nil
+}
+
+func (c *coordinator) addLocalCollectionData(block *common.Block, privateDataSets util.PvtDataCollections) (util.PvtDataCollections, error) {
+	logger.Debugf("addLocalCollectionData starts")
+
+	for _, pds := range privateDataSets {
+		for _, rws := range pds.WriteSet.NsPvtRwset {
+			logger.Debugf("addLocalCollectionData existing: %+v", rws.CollectionPvtRwset)
+		}
+	}
+
+	pvtData := &localCollectionEnhancer{
+		privateDataSets: privateDataSets,
+		c:               c,
+	}
+
+	if block.Metadata == nil || len(block.Metadata.Metadata) <= int(common.BlockMetadataIndex_TRANSACTIONS_FILTER) {
+		return nil, errors.New("Block.Metadata is nil or Block.Metadata lacks a Tx filter bitmap")
+	}
+	txsFilter := txValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	if len(txsFilter) != len(block.Data.Data) {
+		return nil, errors.Errorf("Block data size(%d) is different from Tx filter size(%d)", len(block.Data.Data), len(txsFilter))
+	}
+
+	data := blockData(block.Data.Data)
+
+	_, err := data.forEachTxn(txsFilter, pvtData.inspect)
+	if err != nil {
+		return nil, err
+	}
+
+	return pvtData.privateDataSets, nil
+}
+
 // listMissingPrivateData identifies missing private write sets and attempts to retrieve them from local transient store
 func (c *coordinator) listMissingPrivateData(block *common.Block, ownedRWsets map[rwSetKey][]byte) (*privateDataInfo, error) {
 	if block.Metadata == nil || len(block.Metadata.Metadata) <= int(common.BlockMetadataIndex_TRANSACTIONS_FILTER) {
@@ -712,6 +812,18 @@ type transactionInspector struct {
 	missingRWSButIneligible []rwSetKey
 }
 
+type alwaysAccept struct{}
+
+func (*alwaysAccept) Evaluate(signatureSet []*common.SignedData) error {
+	return nil
+}
+
+type alwaysReject struct{}
+
+func (*alwaysReject) Evaluate(signatureSet []*common.SignedData) error {
+	return errors.New("rejecting")
+}
+
 func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, endorsers []*peer.Endorsement) error {
 	for _, ns := range txRWSet.NsRwSets {
 		for _, hashedCollection := range ns.CollHashedRwSets {
@@ -719,13 +831,66 @@ func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *comm
 				continue
 			}
 
-			// If an error occurred due to the unavailability of database, we should stop committing
-			// blocks for the associated chain. The policy can never be nil for a valid collection.
-			// For collections which were never defined, the policy would be nil and we can safely
-			// move on to the next collection.
-			policy, err := bi.accessPolicyForCollection(chdr, ns.NameSpace, hashedCollection.CollectionName)
-			if err != nil {
-				return &vsccErrors.VSCCExecutionFailureError{Err: err}
+			var policy privdata.CollectionAccessPolicy
+
+			if hashedCollection.CollectionName == "~local" {
+				msp := mgmt.GetLocalMSP()
+				mspid, err := msp.GetIdentifier()
+				if err != nil {
+					panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+				}
+
+				if _, in := bi.ownedRWsets[rwSetKey{
+					collection: hashedCollection.CollectionName,
+					namespace:  ns.NameSpace,
+					seqInBlock: seqInBlock,
+					txID:       chdr.TxId,
+					hash:       hex.EncodeToString(hashedCollection.PvtRwSetHash),
+				}]; in {
+					mp := &common.CollectionPolicyConfig{
+						Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+							SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+						},
+					}
+
+					policy = &privdata.SimpleCollection{
+						Conf: common.StaticCollectionConfig{
+							Name:             "~local",
+							MemberOrgsPolicy: mp,
+						},
+						Name:           "~local",
+						MemberOrgSlice: []string{mspid},
+						AccessPolicy:   &alwaysAccept{},
+					}
+				} else {
+					mp := &common.CollectionPolicyConfig{
+						Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+							SignaturePolicy: cauthdsl.RejectAllPolicy,
+						},
+					}
+
+					policy = &privdata.SimpleCollection{
+						Conf: common.StaticCollectionConfig{
+							Name:             "~local",
+							MemberOrgsPolicy: mp,
+						},
+						Name:           "~local",
+						MemberOrgSlice: []string{},
+						AccessPolicy:   &alwaysReject{},
+					}
+				}
+
+			} else {
+				var err error
+
+				// If an error occurred due to the unavailability of database, we should stop committing
+				// blocks for the associated chain. The policy can never be nil for a valid collection.
+				// For collections which were never defined, the policy would be nil and we can safely
+				// move on to the next collection.
+				policy, err = bi.accessPolicyForCollection(chdr, ns.NameSpace, hashedCollection.CollectionName)
+				if err != nil {
+					return &vsccErrors.VSCCExecutionFailureError{Err: err}
+				}
 			}
 
 			if policy == nil {
@@ -767,6 +932,8 @@ func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *comm
 // accessPolicyForCollection retrieves a CollectionAccessPolicy for a given namespace, collection name
 // that corresponds to a given ChannelHeader
 func (c *coordinator) accessPolicyForCollection(chdr *common.ChannelHeader, namespace string, col string) (privdata.CollectionAccessPolicy, error) {
+	logger.Debugf("Retrieving accessPolicyForCollection %s:%s", namespace, col)
+
 	cp := common.CollectionCriteria{
 		Channel:    chdr.ChannelId,
 		Namespace:  namespace,
@@ -774,6 +941,8 @@ func (c *coordinator) accessPolicyForCollection(chdr *common.ChannelHeader, name
 		TxId:       chdr.TxId,
 	}
 	sp, err := c.CollectionStore.RetrieveCollectionAccessPolicy(cp)
+
+	logger.Debugf("RetrieveCollectionAccessPolicy returns %+v", sp)
 
 	if _, isNoSuchCollectionError := err.(privdata.NoSuchCollectionError); err != nil && !isNoSuchCollectionError {
 		logger.Warning("Failed obtaining policy for", cp, "due to database unavailability:", err)

@@ -555,6 +555,10 @@ var _ bool = Describe("PrivateData", func() {
 })
 
 func initThreeOrgsSetup() (string, *nwo.Network, ifrit.Process, *nwo.Orderer, []*nwo.Peer) {
+	return initThreeOrgsSetupAndVerifyMembership(true)
+}
+
+func initThreeOrgsSetupAndVerifyMembership(verifyMemb bool) (string, *nwo.Network, ifrit.Process, *nwo.Orderer, []*nwo.Peer) {
 	var err error
 	testDir, err := ioutil.TempDir("", "e2e-pvtdata")
 	Expect(err).NotTo(HaveOccurred())
@@ -587,8 +591,10 @@ func initThreeOrgsSetup() (string, *nwo.Network, ifrit.Process, *nwo.Orderer, []
 		n.Peer("org3", "peer0"),
 	}
 
-	By("verifying membership")
-	verifyMembership(n, expectedPeers, "testchannel")
+	if verifyMemb {
+		By("verifying membership")
+		verifyMembership(n, expectedPeers, "testchannel")
+	}
 
 	return testDir, n, process, orderer, expectedPeers
 }

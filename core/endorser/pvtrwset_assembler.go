@@ -13,7 +13,9 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/core/common/privdata"
+	"github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/transientstore"
@@ -50,6 +52,12 @@ func (as *rwSetAssembler) AssemblePvtRWSet(privData *rwset.TxPvtReadWriteSet, tx
 		CollectionConfigs: make(map[string]*common.CollectionConfigPackage),
 	}
 
+	msp := mgmt.GetLocalMSP()
+	mspid, err := msp.GetIdentifier()
+	if err != nil {
+		panic(fmt.Sprintf("GetIdentifier failed with '%s'", err))
+	}
+
 	for _, pvtRwset := range privData.NsPvtRwset {
 		namespace := pvtRwset.Namespace
 		if _, found := txPvtRwSetWithConfig.CollectionConfigs[namespace]; !found {
@@ -57,15 +65,28 @@ func (as *rwSetAssembler) AssemblePvtRWSet(privData *rwset.TxPvtReadWriteSet, tx
 			if err != nil {
 				return nil, errors.WithMessage(err, fmt.Sprintf("error while retrieving collection config for chaincode %#v", namespace))
 			}
-			if cb == nil {
-				return nil, errors.New(fmt.Sprintf("no collection config for chaincode %#v", namespace))
-			}
 
 			colCP := &common.CollectionConfigPackage{}
-			err = proto.Unmarshal(cb, colCP)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid configuration for collection criteria %#v", namespace)
+			if cb != nil {
+				err = proto.Unmarshal(cb, colCP)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid configuration for collection criteria %#v", namespace)
+				}
 			}
+
+			// we add the local collection definition
+			colCP.Config = append(colCP.Config, &common.CollectionConfig{
+				Payload: &common.CollectionConfig_StaticCollectionConfig{
+					StaticCollectionConfig: &common.StaticCollectionConfig{
+						Name: "~local",
+						MemberOrgsPolicy: &common.CollectionPolicyConfig{
+							Payload: &common.CollectionPolicyConfig_SignaturePolicy{
+								SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
+							},
+						},
+					},
+				},
+			})
 
 			txPvtRwSetWithConfig.CollectionConfigs[namespace] = colCP
 		}
