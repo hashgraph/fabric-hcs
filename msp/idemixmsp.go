@@ -186,6 +186,8 @@ func (msp *idemixmsp) Setup(conf1 *m.MSPConfig) error {
 	enrollmentId := conf.Signer.EnrollmentId
 
 	// Verify credential
+
+	// First check withtout the organizational unit identifier
 	valid, err := msp.csp.Verify(
 		UserKey,
 		conf.Signer.Cred,
@@ -193,13 +195,30 @@ func (msp *idemixmsp) Setup(conf1 *m.MSPConfig) error {
 		&bccsp.IdemixCredentialSignerOpts{
 			IssuerPK: IssuerPublicKey,
 			Attributes: []bccsp.IdemixAttribute{
-				{Type: bccsp.IdemixBytesAttribute, Value: []byte(conf.Signer.OrganizationalUnitIdentifier)},
+				{Type: bccsp.IdemixHiddenAttribute},
 				{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(role)},
 				{Type: bccsp.IdemixBytesAttribute, Value: []byte(enrollmentId)},
 				{Type: bccsp.IdemixHiddenAttribute},
 			},
 		},
 	)
+	if err != nil || !valid {
+		// Try with OU
+		valid, err = msp.csp.Verify(
+			UserKey,
+			conf.Signer.Cred,
+			nil,
+			&bccsp.IdemixCredentialSignerOpts{
+				IssuerPK: IssuerPublicKey,
+				Attributes: []bccsp.IdemixAttribute{
+					{Type: bccsp.IdemixBytesAttribute, Value: []byte(conf.Signer.OrganizationalUnitIdentifier)},
+					{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(role)},
+					{Type: bccsp.IdemixBytesAttribute, Value: []byte(enrollmentId)},
+					{Type: bccsp.IdemixHiddenAttribute},
+				},
+			},
+		)
+	}
 	if err != nil || !valid {
 		return errors.WithMessage(err, "Credential is not cryptographically valid")
 	}
