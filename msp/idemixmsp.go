@@ -186,8 +186,6 @@ func (msp *idemixmsp) Setup(conf1 *m.MSPConfig) error {
 	enrollmentId := conf.Signer.EnrollmentId
 
 	// Verify credential
-
-	// First check withtout the organizational unit identifier
 	valid, err := msp.csp.Verify(
 		UserKey,
 		conf.Signer.Cred,
@@ -195,30 +193,13 @@ func (msp *idemixmsp) Setup(conf1 *m.MSPConfig) error {
 		&bccsp.IdemixCredentialSignerOpts{
 			IssuerPK: IssuerPublicKey,
 			Attributes: []bccsp.IdemixAttribute{
-				{Type: bccsp.IdemixHiddenAttribute},
+				{Type: bccsp.IdemixBytesAttribute, Value: []byte(conf.Signer.OrganizationalUnitIdentifier)},
 				{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(role)},
 				{Type: bccsp.IdemixBytesAttribute, Value: []byte(enrollmentId)},
 				{Type: bccsp.IdemixHiddenAttribute},
 			},
 		},
 	)
-	if err != nil || !valid {
-		// Try with OU
-		valid, err = msp.csp.Verify(
-			UserKey,
-			conf.Signer.Cred,
-			nil,
-			&bccsp.IdemixCredentialSignerOpts{
-				IssuerPK: IssuerPublicKey,
-				Attributes: []bccsp.IdemixAttribute{
-					{Type: bccsp.IdemixBytesAttribute, Value: []byte(conf.Signer.OrganizationalUnitIdentifier)},
-					{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(role)},
-					{Type: bccsp.IdemixBytesAttribute, Value: []byte(enrollmentId)},
-					{Type: bccsp.IdemixHiddenAttribute},
-				},
-			},
-		)
-	}
 	if err != nil || !valid {
 		return errors.WithMessage(err, "Credential is not cryptographically valid")
 	}
@@ -355,7 +336,7 @@ func (msp *idemixmsp) Validate(id Identity) error {
 }
 
 func (id *idemixidentity) verifyProof() error {
-	// Verify signature
+	// Verify signature, first all attributes hidden
 	valid, err := id.msp.csp.Verify(
 		id.msp.ipk,
 		id.associationProof,
@@ -363,8 +344,8 @@ func (id *idemixidentity) verifyProof() error {
 		&bccsp.IdemixSignerOpts{
 			RevocationPublicKey: id.msp.revocationPK,
 			Attributes: []bccsp.IdemixAttribute{
-				{Type: bccsp.IdemixBytesAttribute, Value: []byte(id.OU.OrganizationalUnitIdentifier)},
-				{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(id.Role)},
+				{Type: bccsp.IdemixHiddenAttribute},
+				{Type: bccsp.IdemixHiddenAttribute},
 				{Type: bccsp.IdemixHiddenAttribute},
 				{Type: bccsp.IdemixHiddenAttribute},
 			},
@@ -372,6 +353,25 @@ func (id *idemixidentity) verifyProof() error {
 			Epoch:   id.msp.epoch,
 		},
 	)
+	if err != nil || !valid {
+		// THen with some attributes disclosed
+		valid, err = id.msp.csp.Verify(
+			id.msp.ipk,
+			id.associationProof,
+			nil,
+			&bccsp.IdemixSignerOpts{
+				RevocationPublicKey: id.msp.revocationPK,
+				Attributes: []bccsp.IdemixAttribute{
+					{Type: bccsp.IdemixBytesAttribute, Value: []byte(id.OU.OrganizationalUnitIdentifier)},
+					{Type: bccsp.IdemixIntAttribute, Value: getIdemixRoleFromMSPRole(id.Role)},
+					{Type: bccsp.IdemixHiddenAttribute},
+					{Type: bccsp.IdemixHiddenAttribute},
+				},
+				RhIndex: rhIndex,
+				Epoch:   id.msp.epoch,
+			},
+		)
+	}
 	if err == nil && !valid {
 		panic("unexpected condition, an error should be returned for an invalid signature")
 	}
