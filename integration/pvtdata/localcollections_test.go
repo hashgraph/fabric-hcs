@@ -46,35 +46,35 @@ var _ bool = FDescribe("LocalCollections", func() {
 		nwo.DeployChaincode(network, "testchannel", orderer, chaincode)
 
 		By("doing a put on peer0.org2")
-		invokeChaincode(network, "org2", "peer0", "pvtdatacc", `{"Args":["put","~local","foo","bar1"]}`, "testchannel", orderer)
+		invokeChaincode(network, "org2", "peer0", "pvtdatacc", `{"Args":["put","+local","foo","bar1"]}`, "testchannel", orderer)
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar1")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar1")
 
 		By("expecting a failed query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org1")
-		invokeChaincode(network, "org1", "peer0", "pvtdatacc", `{"Args":["put","~local","foo","bar2"]}`, "testchannel", orderer)
+		invokeChaincode(network, "org1", "peer0", "pvtdatacc", `{"Args":["put","+local","foo","bar2"]}`, "testchannel", orderer)
 
 		By("expecting a successful query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar2")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar2")
 
 		By("expecting a failed query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org1 and peer0.org2")
 		sess, err := network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar3"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar3"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org1", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
@@ -87,13 +87,13 @@ var _ bool = FDescribe("LocalCollections", func() {
 		Expect(sess.Err).To(gbytes.Say("Chaincode invoke successful."))
 
 		By("expecting a successful query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar3")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar3")
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar3")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar3")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("peer1.org2 joins the channel")
 		org2peer1 := network.Peer("org2", "peer1")
@@ -112,14 +112,14 @@ var _ bool = FDescribe("LocalCollections", func() {
 		nwo.InstallChaincode(network, chaincode, org2peer1)
 
 		By("expecting a failed query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org2 and peer1.org2")
 		sess, err = network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar4"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar4"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org2", "peer1"), nwo.ListenPort),
@@ -132,17 +132,17 @@ var _ bool = FDescribe("LocalCollections", func() {
 		Expect(sess.Err).To(gbytes.Say("Chaincode invoke successful."))
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar4")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar4")
 
 		By("expecting a successful query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar4")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar4")
 
 		By("doing a put on peer0.org2 and peer1.org2")
 		sess, err = network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar5"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar5"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org3", "peer0"), nwo.ListenPort),
@@ -163,23 +163,23 @@ var _ bool = FDescribe("LocalCollections", func() {
 		waitUntilAllPeersSameLedgerHeight(network, expectedPeers, "testchannel", getLedgerHeight(network, network.Peer("org1", "peer0"), "testchannel"))
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar5")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar5")
 
 		By("expecting a successful query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar5")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar5")
 
 		By("expecting a failed query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org1 with multiple collections")
 		sess, err = network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put","~local","foo","bar6","collectionMarbles","foo","bar7"]}`,
+			Ctor:      `{"Args":["put","+local","foo","bar6","collectionMarbles","foo","bar7"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org1", "peer0"), nwo.ListenPort),
 			},
@@ -191,16 +191,16 @@ var _ bool = FDescribe("LocalCollections", func() {
 		Expect(sess.Err).To(gbytes.Say("Chaincode invoke successful."))
 
 		By("expecting a successful query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","~local","foo"]}`, 0, false, "bar6")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","+local","foo"]}`, 0, false, "bar6")
 
 		By("expecting a failed query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get","~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get","+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a successful query return from peer0.org1")
 		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get","collectionMarbles","foo"]}`, 0, false, "bar7")
@@ -227,35 +227,35 @@ var _ bool = FDescribe("LocalCollections", func() {
 		nwo.DeployChaincode(network, "testchannel", orderer, chaincode)
 
 		By("doing a put on peer0.org2")
-		invokeChaincode(network, "org2", "peer0", "pvtdatacc", `{"Args":["put","~local","foo","bar1"]}`, "testchannel", orderer)
+		invokeChaincode(network, "org2", "peer0", "pvtdatacc", `{"Args":["put","+local","foo","bar1"]}`, "testchannel", orderer)
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar1")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar1")
 
 		By("expecting a failed query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org1")
-		invokeChaincode(network, "org1", "peer0", "pvtdatacc", `{"Args":["put","~local","foo","bar2"]}`, "testchannel", orderer)
+		invokeChaincode(network, "org1", "peer0", "pvtdatacc", `{"Args":["put","+local","foo","bar2"]}`, "testchannel", orderer)
 
 		By("expecting a successful query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar2")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar2")
 
 		By("expecting a failed query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org1 and peer0.org2")
 		sess, err := network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar3"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar3"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org1", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
@@ -268,13 +268,13 @@ var _ bool = FDescribe("LocalCollections", func() {
 		Expect(sess.Err).To(gbytes.Say("Chaincode invoke successful."))
 
 		By("expecting a successful query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar3")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar3")
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar3")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar3")
 
 		By("expecting a failed query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("peer1.org2 joins the channel")
 		org2peer1 := network.Peer("org2", "peer1")
@@ -293,14 +293,14 @@ var _ bool = FDescribe("LocalCollections", func() {
 		nwo.InstallChaincode(network, chaincode, org2peer1)
 
 		By("expecting a failed query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("doing a put on peer0.org2 and peer1.org2")
 		sess, err = network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar4"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar4"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org2", "peer1"), nwo.ListenPort),
@@ -313,17 +313,17 @@ var _ bool = FDescribe("LocalCollections", func() {
 		Expect(sess.Err).To(gbytes.Say("Chaincode invoke successful."))
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar4")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar4")
 
 		By("expecting a successful query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar4")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar4")
 
 		By("doing a put on peer0.org2 and peer1.org2")
 		sess, err = network.PeerUserSession(network.Peer("org1", "peer0"), "User1", commands.ChaincodeInvoke{
 			ChannelID: "testchannel",
 			Orderer:   network.OrdererAddress(orderer, nwo.ListenPort),
 			Name:      "pvtdatacc",
-			Ctor:      `{"Args":["put", "~local","foo","bar5"]}`,
+			Ctor:      `{"Args":["put", "+local","foo","bar5"]}`,
 			PeerAddresses: []string{
 				network.PeerAddress(network.Peer("org2", "peer0"), nwo.ListenPort),
 				network.PeerAddress(network.Peer("org3", "peer0"), nwo.ListenPort),
@@ -344,16 +344,16 @@ var _ bool = FDescribe("LocalCollections", func() {
 		waitUntilAllPeersSameLedgerHeight(network, expectedPeers, "testchannel", getLedgerHeight(network, network.Peer("org1", "peer0"), "testchannel"))
 
 		By("expecting a successful query return from peer0.org2")
-		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar5")
+		query(network, network.Peer("org2", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar5")
 
 		By("expecting a successful query return from peer0.org3")
-		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 0, false, "bar5")
+		query(network, network.Peer("org3", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 0, false, "bar5")
 
 		By("expecting a failed query return from peer1.org2")
-		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org2", "peer1"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 
 		By("expecting a failed query return from peer0.org1")
-		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "~local","foo"]}`, 1, true, "private data matching public hash version is not available")
+		query(network, network.Peer("org1", "peer0"), "testchannel", "pvtdatacc", `{"Args":["get", "+local","foo"]}`, 1, true, "private data matching public hash version is not available")
 	})
 })
 

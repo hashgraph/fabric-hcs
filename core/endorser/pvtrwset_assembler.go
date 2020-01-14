@@ -78,7 +78,7 @@ func (as *rwSetAssembler) AssemblePvtRWSet(privData *rwset.TxPvtReadWriteSet, tx
 			colCP.Config = append(colCP.Config, &common.CollectionConfig{
 				Payload: &common.CollectionConfig_StaticCollectionConfig{
 					StaticCollectionConfig: &common.StaticCollectionConfig{
-						Name: "~local",
+						Name: "+local",
 						MemberOrgsPolicy: &common.CollectionPolicyConfig{
 							Payload: &common.CollectionPolicyConfig_SignaturePolicy{
 								SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),

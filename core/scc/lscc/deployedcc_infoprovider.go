@@ -94,7 +94,7 @@ func (p *DeployedCCInfoProvider) ChaincodeInfo(chaincodeName string, qe ledger.S
 	collConfigPkg.Config = append(collConfigPkg.Config, &common.CollectionConfig{
 		Payload: &common.CollectionConfig_StaticCollectionConfig{
 			StaticCollectionConfig: &common.StaticCollectionConfig{
-				Name: "~local",
+				Name: "+local",
 				MemberOrgsPolicy: &common.CollectionPolicyConfig{
 					Payload: &common.CollectionPolicyConfig_SignaturePolicy{
 						SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
@@ -115,7 +115,7 @@ func (p *DeployedCCInfoProvider) ChaincodeInfo(chaincodeName string, qe ledger.S
 // CollectionInfo implements function in interface ledger.DeployedChaincodeInfoProvider
 func (p *DeployedCCInfoProvider) CollectionInfo(chaincodeName, collectionName string, qe ledger.SimpleQueryExecutor) (*common.StaticCollectionConfig, error) {
 
-	if collectionName == "~local" {
+	if collectionName == "+local" {
 		msp := mgmt.GetLocalMSP()
 		mspid, err := msp.GetIdentifier()
 		if err != nil {
@@ -123,7 +123,7 @@ func (p *DeployedCCInfoProvider) CollectionInfo(chaincodeName, collectionName st
 		}
 
 		return &common.StaticCollectionConfig{
-			Name: "~local",
+			Name: "+local",
 			MemberOrgsPolicy: &common.CollectionPolicyConfig{
 				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
 					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),

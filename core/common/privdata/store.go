@@ -91,7 +91,7 @@ func RetrieveCollectionConfigPackageFromState(cc common.CollectionCriteria, stat
 	// conf.Config = append(conf.Config, &common.CollectionConfig{
 	// 	Payload: &common.CollectionConfig_StaticCollectionConfig{
 	// 		StaticCollectionConfig: &common.StaticCollectionConfig{
-	// 			Name: "~local",
+	// 			Name: "+local",
 	// 			MemberOrgsPolicy: &common.CollectionPolicyConfig{
 	// 				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
 	// 					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),
@@ -116,7 +116,7 @@ func ParseCollectionConfig(colBytes []byte) (*common.CollectionConfigPackage, er
 }
 
 func (c *simpleCollectionStore) retrieveCollectionConfig(cc common.CollectionCriteria, qe ledger.QueryExecutor) (*common.StaticCollectionConfig, error) {
-	if cc.Collection == "~local" {
+	if cc.Collection == "+local" {
 		msp := mgmt.GetLocalMSP()
 		mspid, err := msp.GetIdentifier()
 		if err != nil {
@@ -124,7 +124,7 @@ func (c *simpleCollectionStore) retrieveCollectionConfig(cc common.CollectionCri
 		}
 
 		return &common.StaticCollectionConfig{
-			Name: "~local",
+			Name: "+local",
 			MemberOrgsPolicy: &common.CollectionPolicyConfig{
 				Payload: &common.CollectionPolicyConfig_SignaturePolicy{
 					SignaturePolicy: cauthdsl.SignedByAnyMember([]string{mspid}),

@@ -9,8 +9,8 @@ The flow proceeds as follows:
 
 ## Usage
 
-The current implementation automatically creates a collection called `~local`. Any `PutPrivateData` operation that uses that string as the collection name will execute correctly, and will perist the preimage locally to that peer, without leaking collection membership data.
-Equally, `GetPrivateData` will accept the `~local` collection name and will return successfully if the peer has received the preimage.
+The current implementation automatically creates a collection called `+local`. Any `PutPrivateData` operation that uses that string as the collection name will execute correctly, and will perist the preimage locally to that peer, without leaking collection membership data.
+Equally, `GetPrivateData` will accept the `+local` collection name and will return successfully if the peer has received the preimage.
 
 ## Shortcomings
 

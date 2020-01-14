@@ -663,12 +663,12 @@ type localCollectionEnhancer struct {
 func (l *localCollectionEnhancer) inspect(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, endorsers []*peer.Endorsement) error {
 	for _, rws := range txRWSet.NsRwSets {
 		for _, ns := range rws.CollHashedRwSets {
-			if ns.CollectionName != "~local" {
+			if ns.CollectionName != "+local" {
 				continue
 			}
 
 			t := ledger.PvtNsCollFilter{
-				rws.NameSpace: ledger.PvtCollFilter{"~local": true},
+				rws.NameSpace: ledger.PvtCollFilter{"+local": true},
 			}
 
 			logger.Debugf("GetTxPvtRWSetByTxid for %s %+v", chdr.TxId, t)
@@ -833,7 +833,7 @@ func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *comm
 
 			var policy privdata.CollectionAccessPolicy
 
-			if hashedCollection.CollectionName == "~local" {
+			if hashedCollection.CollectionName == "+local" {
 				msp := mgmt.GetLocalMSP()
 				mspid, err := msp.GetIdentifier()
 				if err != nil {
@@ -855,10 +855,10 @@ func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *comm
 
 					policy = &privdata.SimpleCollection{
 						Conf: common.StaticCollectionConfig{
-							Name:             "~local",
+							Name:             "+local",
 							MemberOrgsPolicy: mp,
 						},
-						Name:           "~local",
+						Name:           "+local",
 						MemberOrgSlice: []string{mspid},
 						AccessPolicy:   &alwaysAccept{},
 					}
@@ -871,10 +871,10 @@ func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *comm
 
 					policy = &privdata.SimpleCollection{
 						Conf: common.StaticCollectionConfig{
-							Name:             "~local",
+							Name:             "+local",
 							MemberOrgsPolicy: mp,
 						},
-						Name:           "~local",
+						Name:           "+local",
 						MemberOrgSlice: []string{},
 						AccessPolicy:   &alwaysReject{},
 					}
