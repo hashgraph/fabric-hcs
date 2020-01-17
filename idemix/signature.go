@@ -286,50 +286,69 @@ func (sig *Signature) Ver(Disclosure []byte, ipk *IssuerPublicKey, msg []byte, a
 	HRand := EcpFromProto(ipk.HRand)
 	HSk := EcpFromProto(ipk.HSk)
 
-	// Verify signature
-	if APrime.Is_infinity() {
-		return errors.Errorf("signature invalid: APrime = 1")
-	}
-	temp1 := FP256BN.Ate(W, APrime)
-	temp2 := FP256BN.Ate(GenG2, ABar)
-	temp2.Inverse()
-	temp1.Mul(temp2)
-	if !FP256BN.Fexp(temp1).Isunity() {
-		return errors.Errorf("signature invalid: APrime and ABar don't have the expected structure")
-	}
+	errGr1 := make(chan error, 1)
+	go func() {
+		// Verify signature
+		if APrime.Is_infinity() {
+			errGr1 <- errors.Errorf("signature invalid: APrime = 1")
+			return
+		}
+		temp1 := FP256BN.Ate(W, APrime)
+		temp2 := FP256BN.Ate(GenG2, ABar)
+		temp2.Inverse()
+		temp1.Mul(temp2)
+		if !FP256BN.Fexp(temp1).Isunity() {
+			errGr1 <- errors.Errorf("signature invalid: APrime and ABar don't have the expected structure")
+			return
+		}
+
+		errGr1 <- nil
+	}()
 
 	// Verify ZK proof
 
 	// Recover t-values
 
 	// Recompute t1
-	t1 := APrime.Mul2(ProofSE, HRand, ProofSR2)
-	temp := FP256BN.NewECP()
-	temp.Copy(ABar)
-	temp.Sub(BPrime)
-	t1.Sub(FP256BN.G1mul(temp, ProofC))
+	t1Gr2 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		t1 := APrime.Mul2(ProofSE, HRand, ProofSR2)
+		temp := FP256BN.NewECP()
+		temp.Copy(ABar)
+		temp.Sub(BPrime)
+		t1.Sub(FP256BN.G1mul(temp, ProofC))
+		t1Gr2 <- t1
+	}()
 
 	// Recompute t2
-	t2 := FP256BN.G1mul(HRand, ProofSSPrime)
-	t2.Add(BPrime.Mul2(ProofSR3, HSk, ProofSSk))
-	for i := 0; i < len(HiddenIndices)/2; i++ {
-		t2.Add(EcpFromProto(ipk.HAttrs[HiddenIndices[2*i]]).Mul2(ProofSAttrs[2*i], EcpFromProto(ipk.HAttrs[HiddenIndices[2*i+1]]), ProofSAttrs[2*i+1]))
-	}
-	if len(HiddenIndices)%2 != 0 {
-		t2.Add(FP256BN.G1mul(EcpFromProto(ipk.HAttrs[HiddenIndices[len(HiddenIndices)-1]]), ProofSAttrs[len(HiddenIndices)-1]))
-	}
-	temp = FP256BN.NewECP()
-	temp.Copy(GenG1)
-	for index, disclose := range Disclosure {
-		if disclose != 0 {
-			temp.Add(FP256BN.G1mul(EcpFromProto(ipk.HAttrs[index]), attributeValues[index]))
+	t2Gr3 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		t2 := FP256BN.G1mul(HRand, ProofSSPrime)
+		t2.Add(BPrime.Mul2(ProofSR3, HSk, ProofSSk))
+		for i := 0; i < len(HiddenIndices)/2; i++ {
+			t2.Add(EcpFromProto(ipk.HAttrs[HiddenIndices[2*i]]).Mul2(ProofSAttrs[2*i], EcpFromProto(ipk.HAttrs[HiddenIndices[2*i+1]]), ProofSAttrs[2*i+1]))
 		}
-	}
-	t2.Add(FP256BN.G1mul(temp, ProofC))
+		if len(HiddenIndices)%2 != 0 {
+			t2.Add(FP256BN.G1mul(EcpFromProto(ipk.HAttrs[HiddenIndices[len(HiddenIndices)-1]]), ProofSAttrs[len(HiddenIndices)-1]))
+		}
+		temp := FP256BN.NewECP()
+		temp.Copy(GenG1)
+		for index, disclose := range Disclosure {
+			if disclose != 0 {
+				temp.Add(FP256BN.G1mul(EcpFromProto(ipk.HAttrs[index]), attributeValues[index]))
+			}
+		}
+		t2.Add(FP256BN.G1mul(temp, ProofC))
+		t2Gr3 <- t2
+	}()
 
 	// Recompute t3
-	t3 := HSk.Mul2(ProofSSk, HRand, ProofSRNym)
-	t3.Sub(Nym.Mul(ProofC))
+	t3Gr4 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		t3 := HSk.Mul2(ProofSSk, HRand, ProofSRNym)
+		t3.Sub(Nym.Mul(ProofC))
+		t3Gr4 <- t3
+	}()
 
 	// add contribution from the non-revocation proof
 	nonRevokedVer, err := getNonRevocationVerifier(RevocationAlgorithm(sig.NonRevocationProof.RevocationAlg))
@@ -340,6 +359,20 @@ func (sig *Signature) Ver(Disclosure []byte, ipk *IssuerPublicKey, msg []byte, a
 	i := sort.SearchInts(HiddenIndices, rhIndex)
 	proofSRh := ProofSAttrs[i]
 	nonRevokedProofBytes, err := nonRevokedVer.recomputeFSContribution(sig.NonRevocationProof, ProofC, Ecp2FromProto(sig.RevocationEpochPk), proofSRh)
+	if err != nil {
+		return err
+	}
+
+	var t1, t2, t3 *FP256BN.ECP
+	for i := 0; i < 4; i++ {
+		select {
+		case err = <-errGr1:
+		case t1 = <-t1Gr2:
+		case t2 = <-t2Gr3:
+		case t3 = <-t3Gr4:
+		}
+	}
+
 	if err != nil {
 		return err
 	}
