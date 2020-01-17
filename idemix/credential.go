@@ -125,18 +125,46 @@ func (cred *Credential) Ver(sk *FP256BN.BIG, ipk *IssuerPublicKey) error {
 	}
 
 	// - verify cryptographic signature on the attributes and the user secret key
-	BPrime := FP256BN.NewECP()
-	BPrime.Copy(GenG1)
-	BPrime.Add(EcpFromProto(ipk.HSk).Mul2(sk, EcpFromProto(ipk.HRand), S))
+	BPrimeGr1 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		BPrime := FP256BN.NewECP()
+		BPrime.Copy(GenG1)
+		BPrime.Add(EcpFromProto(ipk.HSk).Mul2(sk, EcpFromProto(ipk.HRand), S))
+		BPrimeGr1 <- BPrime
+	}()
+
+	loopChanGr2 := make(chan struct {
+		int
+		*FP256BN.ECP
+	}, len(cred.Attrs)/2)
 	for i := 0; i < len(cred.Attrs)/2; i++ {
-		BPrime.Add(
-			EcpFromProto(ipk.HAttrs[2*i]).Mul2(
-				FP256BN.FromBytes(cred.Attrs[2*i]),
-				EcpFromProto(ipk.HAttrs[2*i+1]),
-				FP256BN.FromBytes(cred.Attrs[2*i+1]),
-			),
-		)
+		il := i
+		go func() {
+			loopChanGr2 <- struct {
+				int
+				*FP256BN.ECP
+			}{
+				il,
+				EcpFromProto(ipk.HAttrs[2*il]).Mul2(
+					FP256BN.FromBytes(cred.Attrs[2*il]),
+					EcpFromProto(ipk.HAttrs[2*il+1]),
+					FP256BN.FromBytes(cred.Attrs[2*il+1]),
+				),
+			}
+		}()
 	}
+
+	fpArray := make([]*FP256BN.ECP, len(cred.Attrs)/2)
+	for i := 0; i < len(cred.Attrs)/2; i++ {
+		a := <-loopChanGr2
+		fpArray[a.int] = a.ECP
+	}
+
+	BPrime := <-BPrimeGr1
+	for _, p := range fpArray {
+		BPrime.Add(p)
+	}
+
 	if len(cred.Attrs)%2 != 0 {
 		BPrime.Add(EcpFromProto(ipk.HAttrs[len(cred.Attrs)-1]).Mul(FP256BN.FromBytes(cred.Attrs[len(cred.Attrs)-1])))
 	}
@@ -145,12 +173,26 @@ func (cred *Credential) Ver(sk *FP256BN.BIG, ipk *IssuerPublicKey) error {
 	}
 
 	// Verify BBS+ signature. Namely: e(w \cdot g_2^e, A) =? e(g_2, B)
-	a := GenG2.Mul(E)
-	a.Add(Ecp2FromProto(ipk.W))
-	a.Affine()
+	lGr := make(chan *FP256BN.FP12, 1)
+	go func() {
+		a := GenG2.Mul(E)
+		a.Add(Ecp2FromProto(ipk.W))
+		a.Affine()
+		lGr <- FP256BN.Fexp(FP256BN.Ate(a, A))
+	}()
 
-	left := FP256BN.Fexp(FP256BN.Ate(a, A))
-	right := FP256BN.Fexp(FP256BN.Ate(GenG2, B))
+	rGr := make(chan *FP256BN.FP12, 1)
+	go func() {
+		rGr <- FP256BN.Fexp(FP256BN.Ate(GenG2, B))
+	}()
+
+	var left, right *FP256BN.FP12
+	for i := 0; i < 2; i++ {
+		select {
+		case left = <-lGr:
+		case right = <-rGr:
+		}
+	}
 
 	if !left.Equals(right) {
 		return errors.Errorf("credential is not cryptographically valid")
