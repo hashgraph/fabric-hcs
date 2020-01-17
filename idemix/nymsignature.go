@@ -73,18 +73,35 @@ func NewNymSignature(sk *FP256BN.BIG, Nym *FP256BN.ECP, RNym *FP256BN.BIG, ipk *
 // Ver verifies an idemix NymSignature
 func (sig *NymSignature) Ver(nym *FP256BN.ECP, ipk *IssuerPublicKey, msg []byte) error {
 	ProofC := FP256BN.FromBytes(sig.GetProofC())
-	ProofSSk := FP256BN.FromBytes(sig.GetProofSSk())
-	ProofSRNym := FP256BN.FromBytes(sig.GetProofSRNym())
 	Nonce := FP256BN.FromBytes(sig.GetNonce())
-
-	HRand := EcpFromProto(ipk.HRand)
 	HSk := EcpFromProto(ipk.HSk)
 
 	// Verify Proof
 
+	chanGr1 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		chanGr1 <- nym.Mul(ProofC)
+	}()
+
 	// Recompute t-values using s-values
-	t := HSk.Mul2(ProofSSk, HRand, ProofSRNym)
-	t.Sub(nym.Mul(ProofC)) // t = h_{sk}^{s_{sk} \ cdot h_r^{s_{RNym}
+
+	chanGr2 := make(chan *FP256BN.ECP, 1)
+	go func() {
+		ProofSSk := FP256BN.FromBytes(sig.GetProofSSk())
+		ProofSRNym := FP256BN.FromBytes(sig.GetProofSRNym())
+		HRand := EcpFromProto(ipk.HRand)
+		chanGr2 <- HSk.Mul2(ProofSSk, HRand, ProofSRNym)
+	}()
+
+	var temp, t *FP256BN.ECP
+	for i := 0; i < 2; i++ {
+		select {
+		case temp = <-chanGr1:
+		case t = <-chanGr2:
+		}
+	}
+
+	t.Sub(temp) // t = h_{sk}^{s_{sk} \ cdot h_r^{s_{RNym}
 
 	// Recompute challenge
 	proofData := make([]byte, len([]byte(signLabel))+2*(2*FieldBytes+1)+FieldBytes+len(msg))
