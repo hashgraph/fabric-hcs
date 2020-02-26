@@ -42,7 +42,7 @@ func getStateFromMetadata(metadataValue []byte, chainID string) (time.Time, uint
 		timestamp, err := ptypes.Timestamp(hcsMetadata.GetLastConsensusTimestampPersisted())
 		if err != nil {
 			logger.Panicf("[channel: %s] Ledger may be corrupted: "+
-				"cannot unmarshal orderer metadata in most recent block, %v", chainID, err)
+				"invalid timestamp in most recent block, %v", chainID, err)
 		}
 		return timestamp,
 			hcsMetadata.GetLastOriginalSequenceProcessed(),
@@ -72,7 +72,7 @@ func newChain(
 	lastFragmentId uint64,
 ) (*chainImpl, error) {
 	lastCutBlockNumber := support.Height() - 1
-	logger.Infof("[channel: %s] starting chain with last persisted consensus timestamp %d and " +
+	logger.Infof("[channel: %s] starting chain with last persisted consensus timestamp %d and "+
 		"last recorded block [%d]", support.ChannelID(), lastConsensusTimestampPersisted.UnixNano(), lastCutBlockNumber)
 
 	doneReprocessingMsgInFlight := make(chan struct{})
@@ -148,7 +148,7 @@ type chainImpl struct {
 	fragmenter  *fragmentSupport
 	fragmentKey string
 
-	gcmCipher   cipher.AEAD
+	gcmCipher cipher.AEAD
 }
 
 func (chain *chainImpl) Order(env *common.Envelope, configSeq uint64) error {
@@ -335,7 +335,7 @@ func (chain *chainImpl) processMessages() error {
 				logger.Critical("[channel: %s] unable to unmarshal ordered message", chain.ChannelID())
 				continue
 			} else {
-				logger.Debugf("[channel %s] successfully unmarshalled ordered message, " +
+				logger.Debugf("[channel %s] successfully unmarshalled ordered message, "+
 					"consensus timestamp %v", chain.ChannelID(), resp.ConsensusTimeStamp)
 			}
 			switch msg.Type.(type) {
@@ -416,7 +416,7 @@ func (chain *chainImpl) commitNormalMessage(message *cb.Envelope, curConsensusTi
 		chain.lastResubmittedConfigSequence,
 		chain.lastFragmentId)
 	chain.WriteBlock(block, metadata)
-	logger.Debugf("[channel: %s] Batch filled, just cut block [%d] - last persisted consensus timestamp" +
+	logger.Debugf("[channel: %s] Batch filled, just cut block [%d] - last persisted consensus timestamp"+
 		"is now %v", chain.ChannelID(), chain.lastCutBlockNumber, *consensusTimestamp)
 
 	// Commit the second block if exists
@@ -432,7 +432,7 @@ func (chain *chainImpl) commitNormalMessage(message *cb.Envelope, curConsensusTi
 			chain.lastResubmittedConfigSequence,
 			chain.lastFragmentId)
 		chain.WriteBlock(block, metadata)
-		logger.Debugf("[channel: %s] Batch filled, just cut block [%d] - last persisted consensus" +
+		logger.Debugf("[channel: %s] Batch filled, just cut block [%d] - last persisted consensus"+
 			"timestamp is now %v", chain.ChannelID(), chain.lastCutBlockNumber, *consensusTimestamp)
 	}
 }
@@ -581,7 +581,7 @@ func (chain *chainImpl) processRegularMessage(msg *ab.HcsMessageRegular, ts *tim
 
 			logger.Debugf("[channel: %s] Resubmitted config message with sequence %d, block ingress messages", chain.ChannelID(), receivedSequence)
 			chain.lastResubmittedConfigSequence = receivedSequence // Keep track of last resubmitted message offset
-			chain.reprocessConfigPending()                     // Begin blocking ingress messages
+			chain.reprocessConfigPending()                         // Begin blocking ingress messages
 
 			return nil
 		}
@@ -610,7 +610,7 @@ func (chain *chainImpl) processTimeToCutMessage(msg *ab.HcsMessageTimeToCut, ts 
 		chain.timer = nil
 		batch := chain.BlockCutter().Cut()
 		if len(batch) == 0 {
-			return fmt.Errorf("bug, got correct time-to-cut message (block %d), " +
+			return fmt.Errorf("bug, got correct time-to-cut message (block %d), "+
 				"but no pending transactions", blockNumber)
 		}
 		block := chain.CreateNextBlock(batch)
@@ -619,8 +619,8 @@ func (chain *chainImpl) processTimeToCutMessage(msg *ab.HcsMessageTimeToCut, ts 
 		consensusTimestamp := timestampProtoOrPanic(ts)
 		metadata := &ab.HcsMetadata{
 			LastConsensusTimestampPersisted: consensusTimestamp,
-			LastOriginalSequenceProcessed: chain.lastOriginalSequenceProcessed,
-			LastResubmittedConfigSequence: chain.lastResubmittedConfigSequence,
+			LastOriginalSequenceProcessed:   chain.lastOriginalSequenceProcessed,
+			LastResubmittedConfigSequence:   chain.lastResubmittedConfigSequence,
 		}
 		chain.WriteBlock(block, metadata)
 		logger.Debugf("[channel: %s] successfully cut block %d, triggered by time-to-cut",
@@ -638,7 +638,7 @@ func (chain *chainImpl) sendTimeToCut() error {
 	msg := &ab.HcsMessage{
 		Type: &ab.HcsMessage_TimeToCut{
 			TimeToCut: &ab.HcsMessageTimeToCut{
-				BlockNumber: chain.lastCutBlockNumber+1,
+				BlockNumber: chain.lastCutBlockNumber + 1,
 			},
 		},
 	}
@@ -728,7 +728,8 @@ func makeGCMCipher() cipher.AEAD {
 	filename := "/var/hyperledger/fabric/orderer/aes.key"
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		logger.Panicf("failed to read file: %s, err = %v", filename, err)
+		logger.Warnf("failed to read file: %s, err = %v", filename, err)
+		return nil
 	}
 
 	block, err := aes.NewCipher(data)
@@ -745,6 +746,10 @@ func makeGCMCipher() cipher.AEAD {
 }
 
 func (chain *chainImpl) encrypt(plaintext []byte) ([]byte, error) {
+	if chain.gcmCipher == nil {
+		return plaintext, nil
+	}
+
 	nonce := make([]byte, chain.gcmCipher.NonceSize())
 	if _, err := io.ReadFull(crand.Reader, nonce); err != nil {
 		logger.Criticalf("failed to read nonce from secure random source")
@@ -756,6 +761,10 @@ func (chain *chainImpl) encrypt(plaintext []byte) ([]byte, error) {
 }
 
 func (chain *chainImpl) decrypt(ciphertext []byte) ([]byte, error) {
+	if chain.gcmCipher == nil {
+		return ciphertext, nil
+	}
+
 	nonce := ciphertext[0:chain.gcmCipher.NonceSize()]
 	plaintext, err := chain.gcmCipher.Open(nil, nonce, ciphertext[chain.gcmCipher.NonceSize():], nil)
 	if err != nil {
