@@ -18,6 +18,7 @@ import (
 	mockmultichannel "github.com/hyperledger/fabric/orderer/mocks/common/multichannel"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -45,7 +46,7 @@ func TestHandleChain(t *testing.T) {
 	mockInvalidOrdererHcs := &orderer.Hcs{TopicId: "invalid hcs topic id"}
 	mockSupport := &mockmultichannel.ConsenterSupport{
 		SharedConfigVal: mockOrderer,
-		ChannelIDVal:    "mock-fabric-channel",
+		ChannelIDVal:    channelNameForTest(t),
 	}
 
 	mockMetadata := &cb.Metadata{Value: protoutil.MarshalOrPanic(&ab.HcsMetadata{
@@ -130,4 +131,8 @@ func setupTestLogging(logLevel string) {
 	// the logs when running tests on this package.
 	spec := fmt.Sprintf("orderer.consensus.hcs=%s", logLevel)
 	flogging.ActivateSpec(spec)
+}
+
+func channelNameForTest(t *testing.T) string {
+	return fmt.Sprintf("%s.channel", strings.Replace(strings.ToLower(t.Name()), "/", ".", -1))
 }

@@ -33,7 +33,8 @@ func (processor *fragmentSupport) reassemble(fragment *ab.HcsMessageFragment) []
 
 	sequence := fragment.Sequence
 	if sequence >= uint32(len(holder.fragments)) {
-		logger.Panicf("fragment sequence %d is out of bound %d", sequence, len(holder.fragments))
+		logger.Errorf("fragment sequence %d is out of bound %d", sequence, len(holder.fragments))
+		return nil
 	}
 
 	if holder.fragments[sequence] != nil {
