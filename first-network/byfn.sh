@@ -9,7 +9,7 @@
 # Fabric network.
 #
 # The end-to-end verification provisions a sample Fabric network consisting of
-# two organizations, each maintaining two peers, and a Raft ordering service.
+# two organizations, each maintaining two peers, and the Hedera consensus ordering service.
 #
 # This verification makes use of two fundamental tools, which are necessary to
 # create a functioning transactional network with digital signature validation
